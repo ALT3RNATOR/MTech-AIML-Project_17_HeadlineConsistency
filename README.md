@@ -1,153 +1,116 @@
-# Assignment 14: Headline–Article Semantic Consistency
+# MTech AIML Project 17: Headline–Article Consistency
 
+**Assignment 14**  
 **Group 17**  
-Anurag Rai — MT/AI/10016/26  
-Ankit Singh — MT/AI/10022/26
+- Anurag Rai — MT/AI/10016/26
+- Ankit Singh — MT/AI/10022/26
 
-This project compares two approaches for deciding whether a news headline is semantically consistent with its article:
+## Project overview
 
-1. **TF-IDF + cosine similarity** (traditional text-similarity baseline)
-2. **Sentence embeddings + cosine similarity** using `sentence-transformers/all-MiniLM-L6-v2`
+This project compares two methods for deciding whether a news headline is semantically consistent with its corresponding article:
 
-It also evaluates both methods on a manually reviewed challenge set containing deliberately modified headlines.
+- **TF-IDF + cosine similarity** — traditional text-similarity baseline
+- **Sentence embeddings + cosine similarity** — pretrained `sentence-transformers/all-MiniLM-L6-v2`
 
-## Research task
+A manually reviewed modified-headline challenge tests whether the methods detect subtle factual changes. MiniLM is used as a frozen encoder; it is not fine-tuned.
 
-Given a headline and its corresponding article text, assign one of two labels:
+## Repository structure
 
-- `consistent` (1): the article supports the headline
-- `inconsistent` (0): the article does not support the headline
+```text
+MTech-AIML-Project_17_Headline_Article_Consistency/
+├── README.md
+├── requirements.txt
+├── data/
+│   ├── README.md
+│   └── sample_data.csv
+├── figures/
+│   ├── modified_headline_challenge.png
+│   └── official_test_results.png
+├── notebooks/
+│   └── experiment.ipynb
+├── src/
+│   ├── preprocessing.py
+│   ├── model.py
+│   └── evaluation.py
+├── results/
+│   ├── results.csv
+│   └── comparison_table.csv
+└── presentation/
+    └── 17_Headline_Article_Consistency.pptx
+```
 
-The original FNC-1 stance labels are mapped as follows:
+Local datasets, fitted artifacts, and review files are excluded from Git by `.gitignore`.
+
+## Dataset and labels
+
+The dataset consists of FNC-1 headline–article pairs. Stance labels are mapped to the binary consistency task:
 
 | FNC-1 stance | Project label |
 |---|---|
 | `agree`, `discuss` | `consistent` (1) |
 | `disagree`, `unrelated` | `inconsistent` (0) |
 
-## Repository layout
+`data/sample_data.csv` contains synthetic examples to show the expected input format; it is not used for training or evaluation. The full cleaned source files are not included. The notebook currently expects `train_labeled_clean.csv` and `official_test_labeled_clean.csv` at `B:\MTech\Codes\SEM 1\MAI\ASS\Dataset\data\processed`. If you clone the repository elsewhere, update `source_dir` in the data-splitting section of `notebooks/experiment.ipynb`.
 
-```text
-NEW/
-├── 01_Data_Splitting.ipynb
-├── 02_Model_Training_Evaluation.ipynb
-├── 03_Unseen_Modified_Challenge.ipynb
-├── Assignment_14_Group_17_8_Slides.pptx
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── data/
-│   ├── processed/       # Clean labeled source CSVs (local; not committed)
-│   ├── splits/          # Fit, validation, and official-test CSVs (local)
-│   └── challenge/       # Generated/reviewed challenge CSVs (local)
-├── artifacts/           # Fitted TF-IDF vectorizer and related files (local)
-└── results/
-    ├── metrics/         # Exported aggregate metrics, when organized here
-    ├── predictions/     # Row-level outputs (local/not committed)
-    └── figures/          # Plots for the report and presentation
-```
+The experiment uses a fit set of **31,957** pairs, a validation set of **7,670** pairs, and the preserved official test set of **25,413** pairs. Article groups are separated using `body_id`, with overlap checks between partitions. The challenge started with 350 original headlines and 150 proposed numeric edits. After manual review, 132 edits were approved and 18 rejected; the scored challenge contains **482 examples** (350 originals and 132 approved edits).
 
-The current notebooks write some outputs directly under `results/`; this README reflects the project’s intended organization. Data files and fitted artifacts are excluded from Git by default because they can be large and may contain third-party news text.
-
-## Data and split design
-
-The processed training data contains 49,972 labeled pairs before the challenge article groups are reserved. The notebooks create these partitions:
-
-| Partition | Rows | Purpose |
-|---|---:|---|
-| Fit | 31,957 | Fit the TF-IDF vocabulary and prepare model inputs |
-| Validation | 7,670 | Select the decision threshold for each method |
-| Official test | 25,413 | Final evaluation using the preserved official FNC-1 test split |
-| Modified-headline challenge | 500 candidates before review | 350 original headlines plus 150 proposed numeric edits |
-
-The challenge review approved 132 edited headlines and rejected 18. The scored challenge therefore contains 350 original examples and 132 approved edited examples: **482 rows**. The split notebook checks `body_id` overlap between fit, validation, official-test, and challenge partitions.
-
-The original cleaned source files expected by the split notebook are `train_labeled_clean.csv` and `official_test_labeled_clean.csv`. In the current setup, `01_Data_Splitting.ipynb` reads them from:
-
-```text
-B:\MTech\Codes\SEM 1\MAI\ASS\Dataset\data\processed
-```
-
-If you clone or move the repository, update `source_dir` in the first configuration cell of `01_Data_Splitting.ipynb` to the local location of those files. The model and challenge notebooks also define the project root in their configuration cells; update `new_dir` if the repository is moved.
-
-## Methods
+## Methodology
 
 ### TF-IDF + cosine similarity
 
-The headline and article model input are represented with word unigrams and bigrams. The TF-IDF vectorizer is fitted on the fit partition only. Cosine similarity between each headline vector and article vector is used as the score.
+Word unigrams and bigrams are converted to TF-IDF vectors. The vectorizer is fitted on the fit partition only. Cosine similarity between each headline and its article text is used as the score.
 
 ### Sentence embeddings + cosine similarity
 
-The pretrained `sentence-transformers/all-MiniLM-L6-v2` encoder produces normalized headline and article embeddings. The encoder is frozen; no supervised fine-tuning is performed. Cosine similarity between the embeddings is the score.
+The pretrained `all-MiniLM-L6-v2` encoder produces normalized embeddings for the headline and article text. Cosine similarity between the paired embeddings is the score. The encoder is frozen and uses a 128-token input limit.
 
-### Thresholds and decision rule
+### Threshold and metrics
 
-Each method uses a threshold selected on validation data by maximizing Macro-F1. Ties are broken using F1 for the `consistent` class. A score greater than or equal to the threshold predicts `consistent`; a lower score predicts `inconsistent`.
+Each model’s threshold is selected on validation data by maximizing Macro-F1, with consistent-class F1 as a tie-breaker. The selected thresholds are **0.0308** for TF-IDF and **0.4118** for MiniLM. Scores at or above the threshold predict `consistent`; lower scores predict `inconsistent`. Thresholds are fixed before official-test evaluation. ROC-AUC is calculated from continuous scores.
 
-The saved validation thresholds are approximately:
+The required evaluation metrics are Accuracy, Precision, Recall, Macro-F1, and ROC-AUC. Precision and Recall treat `consistent` as the positive class. The modified-headline challenge also reports edit rejection rate and paired original/edit flip success.
 
-- TF-IDF: `0.0308`
-- MiniLM: `0.4118`
-
-The thresholds are fixed before official-test evaluation. ROC-AUC is calculated from continuous similarity scores rather than thresholded predictions.
-
-## Evaluation
-
-The official test and modified-headline challenge report:
-
-- Accuracy
-- Precision (`consistent` is the positive class)
-- Recall (`consistent` is the positive class)
-- Macro-F1
-- ROC-AUC
-
-The challenge also reports edited-headline rejection rate and paired original/edit flip success. These targeted measures show whether a model accepts an original headline but rejects its edited counterpart.
-
-### Recorded official-test results
+## Official test results
 
 | Method | Accuracy | Precision | Recall | Macro-F1 | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
 | TF-IDF + cosine | 0.9004 | 0.7457 | 0.9144 | 0.8762 | 0.9477 |
-| MiniLM embeddings + cosine | 0.9571 | 0.8797 | 0.9601 | 0.9445 | 0.9848 |
+| MiniLM embeddings + cosine | **0.9571** | **0.8797** | **0.9601** | **0.9445** | **0.9848** |
 
-These are the results recorded by the current project notebooks; rerunning may vary if package/model versions or source data change.
+![Official-test comparison of TF-IDF and MiniLM](figures/official_test_results.png)
 
-## Run the notebooks
+MiniLM scored higher on all five official-test metrics.
 
-Use Python 3.10 or later (the project was developed with Python 3.12) and run the notebooks in this order:
+## Modified-headline challenge results
 
-1. Install the packages listed in `requirements.txt`.
-2. Place the two cleaned source CSVs in the configured source folder and verify the path in `01_Data_Splitting.ipynb`.
-3. Run `01_Data_Splitting.ipynb` to generate the partitions and challenge review CSV.
-4. Review each proposed edit against its article. Complete the review CSV before running the challenge notebook.
-5. Run `02_Model_Training_Evaluation.ipynb` to prepare both similarity methods, select validation thresholds, and evaluate the official test. This saves the vectorizer and threshold values used by the challenge notebook.
-6. Run `03_Unseen_Modified_Challenge.ipynb` to score the approved challenge examples and save challenge metrics.
+| Metric | TF-IDF + cosine | MiniLM + cosine |
+|---|---:|---:|
+| Accuracy | 71.37% | 70.54% |
+| Precision | 72.65% | 72.91% |
+| Recall | 97.14% | 94.57% |
+| Macro-F1 | 44.30% | 46.79% |
+| ROC-AUC | 43.27% | 47.73% |
+| Edited-headline rejection rate | 3.03% | 6.82% |
+| Paired original/edit flip success | 2.27% | 1.52% |
 
-The challenge notebook depends on the vectorizer and validation thresholds created by the model-training notebook, as well as the completed manual-review CSV.
+![Modified-headline challenge results](figures/modified_headline_challenge.png)
 
-Install dependencies from the repository root:
+Both methods rarely rejected an approved factual edit. The challenge results show that strong official-test performance does not guarantee sensitivity to subtle factual changes.
 
-```bash
-python -m pip install -r requirements.txt
-```
+## Run the experiment
 
-Then launch Jupyter:
+1. Use Python 3.10 or later (developed with Python 3.12).
+2. Install dependencies from the repository root: `python -m pip install -r requirements.txt`.
+3. Open `notebooks/experiment.ipynb` and confirm the project and source-data paths in its setup cells.
+4. Run the data-splitting section, then the model-training and official-test evaluation section.
+5. Confirm that the manually reviewed challenge file is available at `data/challenge_headline_review_completed.csv`. For a fresh clone, provide the reviewed CSV there; it is excluded from Git because it contains news text.
+6. Run the modified-headline challenge section after the vectorizer, validation thresholds, and review file are ready.
 
-```bash
-jupyter lab
-```
+The first MiniLM run downloads the pretrained checkpoint from Hugging Face unless it is already cached. The notebook creates local split data and model artifacts as it runs.
 
-Run the notebook cells from top to bottom. The MiniLM checkpoint is downloaded from Hugging Face on first use, so an internet connection is needed unless the model is already cached locally.
+## Limitations
 
-## Reproducibility and limitations
-
-- The split uses a fixed random seed in the notebook and groups by `body_id` to reduce article-level leakage.
-- Keep the official test partition separate from fitting and threshold selection.
-- The challenge edits are numeric edits reviewed by a human; they do not represent all types of misleading headlines.
-- Challenge articles are held out by article group from fit and validation, but are drawn from FNC-1’s training-side data. This is not a cross-news-source test.
-- Cosine similarity measures lexical or semantic relatedness; it does not itself verify factual entailment.
-- Do not claim that the models reliably detect factual changes based only on their official-test scores.
-
-## Data handling
-
-Do not commit raw or processed news datasets, row-level prediction files, fitted model files, or the manually reviewed challenge CSV unless you have checked the dataset’s license and have a reason to distribute them. The `.gitignore` keeps these files local by default. Aggregate metric tables, figures, and notebooks can be committed after checking that notebook outputs do not embed full article text.
+- The challenge focuses on manually reviewed numeric edits and does not cover every type of misleading headline.
+- Challenge articles are held out by article group from fitting and validation, but come from FNC-1’s training-side data. This is not a test on an independent news source.
+- Cosine similarity measures lexical or semantic relatedness; it does not directly verify factual entailment.
+- Check the dataset license before redistributing any source data, review file, or row-level prediction output.
