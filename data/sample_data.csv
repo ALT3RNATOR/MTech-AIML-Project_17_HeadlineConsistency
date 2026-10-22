@@ -1,0 +1,4 @@
+headline,article_model_input,label_name,label,source
+City council approves a 10-year transit plan,The council approved a ten-year plan to improve local transit.,consistent,1,synthetic example
+City council approves a 20-year transit plan,The council approved a ten-year plan to improve local transit.,inconsistent,0,synthetic example
+Researchers publish a study on urban trees,The article reports a new study examining the benefits of trees in cities.,consistent,1,synthetic example
