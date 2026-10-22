@@ -1,0 +1,10 @@
+# Tested with Python 3.12; use Python 3.10 or newer.
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5
+sentence-transformers>=3.0
+huggingface-hub>=0.24
+joblib>=1.4
+matplotlib>=3.8
+jupyterlab>=4.2
+ipykernel>=6.29
